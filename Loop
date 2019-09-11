@@ -1,0 +1,23 @@
+import java.io.*;
+import java.util.Scanner;
+
+public class Wizard {
+
+	public static void main(String[] args) {
+
+		String str = " Abracadabra";
+		Scanner input = new Scanner(System.in);
+
+		int n = input.nextInt();
+
+		if (n <= 100 && n >= 1) {
+			for (int i = 1; i <= n; i++) {
+				System.out.println(i + str);
+			}
+		}
+		else
+		{
+			System.out.println("Lär dig läsa IDIOT!");
+		}
+	}
+}
