@@ -1,0 +1,25 @@
+import java.util.*;
+
+public class tal {
+
+	public static void main(String[] args) {
+		System.out.println("Input a number:");
+		Scanner input = new Scanner(System.in);
+
+		int tal = input.nextInt();
+
+		boolean run = true;
+		int sum = 0;
+
+		while (run) {
+			sum += tal % 10;
+
+			tal = tal / 10;
+			if (tal <= 0) {
+				run = false;
+			}
+		}
+		
+		System.out.println(sum);
+	}
+}
