@@ -1,0 +1,169 @@
+import time
+import requests
+from requests.exceptions import RequestException
+from requests.exceptions import SSLError
+from requests.exceptions import ChunkedEncodingError
+from time import sleep
+from proxymanager import ProxyManager
+from fake_useragent import UserAgent
+import sys
+import names
+import cloudscraper
+import random
+from random import randrange
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
+from OpenSSL.SSL import Error as OSSLError
+from polling import TimeoutException as PTE
+
+api_key = "80532ae4f57ddf5c234a032fea2ae1ef"
+shipping_info = {
+    'city': "Molnlycke",
+    'country': "SE",
+    'state': "",
+    'street': "Textilvagen 41",
+    'streetno': "41",
+    'zip': "43539"
+}
+### NOTE, IF YOU ONLY WANT TO ENTER FOR 1 SIZE THEN REMOVE ALL OTHER SIZES
+sizes = ["38,5", "39", "40", "40,5", "41", "42", "42,5", "43", "44", "44,5"]
+site_key = '6LeZJZEUAAAAAPLuYfMYiMOF7X7tKMz45xfEIXaZ'
+
+raffles = {
+    "sacai-x-nike-blazer-mid-black-": "https://raffle.bstn.com/sacai-x-nike-blazer-mid-black-",
+    "sacai-x-nike-blazer-mid-white-": "https://raffle.bstn.com/sacai-x-nike-blazer-mid-white-"
+}
+
+p = ProxyManager(sys.argv[3])
+if len(p.proxies) == 0:
+    p = ProxyManager()
+
+s = cloudscraper.create_scraper(
+    delay=10,
+    recaptcha={
+        'provider': '2captcha',
+        'api_key': api_key,
+        'proxy': True
+    }
+)
+
+retry = Retry(connect=3, backoff_factor=0.5)
+adapter = HTTPAdapter(max_retries=retry)
+s.mount('http://', adapter)
+s.mount('https://', adapter)
+
+try:
+    ua = UserAgent(verify_ssl=False, use_cache_server=False)
+    useragent = ua.chrome
+except FakeUserAgentError as e:
+    useragent = "Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.36 (KHTML like Gecko) Chrome/44.0.2403.155 Safari/537.36"
+
+
+headers = {
+    'user-agent': ua.chrome,
+    'Accept': 'application/json, text/javascript, */*; q=0.01',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'Accept-Encoding': 'gzip, deflate, br'
+}
+
+if len(sys.argv) != 5:
+    print("you forgot to include the raffle variant when running the script")
+    print("python bstn_raffle_gen.py <variant> <emails> <proxies> <ig>, <--- example")
+    print("sacai-x-nike-blazer-mid-black-")
+    sys.exit(1)
+
+raffle_select = sys.argv[1]
+
+if raffle_select not in raffles.keys():
+    print("you forgot to include the raffle variant when running the script")
+    print("python bstn_raffle_gen.py <variant>, <--- example")
+    print("sacai-x-nike-blazer-mid-black-")
+    sys.exit(1)
+
+with open(sys.argv[2], 'r') as ff:
+    emails = ff.read().splitlines()
+
+with open(sys.argv[4], 'r') as ff:
+    instagrams = ff.read().splitlines()
+
+def get_recaptcha(url, proxy):
+    response = s.post("https://2captcha.com/in.php?key={}&method=userrecaptcha&googlekey={}&pageurl={}&proxy{}&proxytype=HTTPS".format(api_key, site_key, url, proxy))
+    text = response.text
+    result = text.split('|')
+    if len(result) != 2:
+        return None
+    captcha_id = result[1]
+    recaptcha_answer = s.get("https://2captcha.com/res.php?key={}&action=get&id={}".format(api_key, captcha_id)).text
+    print("solving ref captcha...")
+    while 'CAPCHA_NOT_READY' in recaptcha_answer:
+        sleep(5)
+        recaptcha_answer = s.get("https://2captcha.com/res.php?key={}&action=get&id={}".format(api_key, captcha_id)).text
+    if len(recaptcha_answer.split(('|'))) != 2:
+        return None
+    recaptcha_answer = recaptcha_answer.split('|')[1]
+    print("solved ref captcha")
+    return recaptcha_answer
+
+
+while len(emails) > 0:
+    email = emails[0]
+    if len(email) == 0:
+        continue
+    s.cookies.clear()
+
+    print("Creating raffle entries for {}".format(email))
+    proxy = p.random_proxy().get_dict()
+    instagram = random.choice(instagrams)
+    h = headers
+    try:
+        response = s.get("https://bstn.com", headers=h, proxies=proxy)
+        response = s.get("https://raffle.bstn.com", headers=h, proxies=proxy)
+        print("bypassed cloudflare...")
+        k = raffle_select
+        v = raffles[raffle_select]
+        response = s.get(v, headers=h, proxies=proxy)
+        recaptcha = get_recaptcha(v, proxy)
+        if recaptcha is None:
+            print("Someone at 2captcha failed solving the captcha, retrying...")
+            continue
+        size = random.choice(sizes)
+        raffle_entry = {
+            'acceptedPrivacy': True,
+            'additional': {
+                'instagram': instagram
+            },
+            'email': email,
+            'issuerId': "raffle.bstn.com",
+            'newsletter': False,
+            'raffle': {
+                'raffleId': k,
+                'parentIndex': 0,
+                'option': size
+            },
+            'option': size,
+            'parentIndex': 0,
+            'raffleId': k,
+            'recaptchaToken': recaptcha,
+            'title': "male",
+            'firstName': names.get_first_name(gender='male'),
+            'lastName': names.get_last_name(),
+            'address2': "Apt " + str(randrange(999)),
+        }
+        raffle_entry.update(shipping_info)
+        if len(raffle_entry['state']) == 0:
+            del raffle_entry['state']
+        h['Content-Type'] = 'application/json;charset=UTF-8'
+        h['origin'] = "https://raffle.bstn.com"
+        h['referer'] = v
+        response = s.post("https://raffle.bstn.com/api/register", headers=h, json=raffle_entry, proxies=proxy)
+        if response.ok:
+            print("successful entry for {}".format(k))
+            emails.remove(email)
+        else:
+            print("error submitting entry for {}".format(k))
+            print(response.text)
+            continue
+    except (RequestException, SSLError, OSSLError, ChunkedEncodingError, PTE) as e:
+        print("connection error, retrying {}".format(email))
+        continue
+    time.sleep(1)
