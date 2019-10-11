@@ -1,0 +1,19 @@
+import java.util.Scanner;
+
+public class uppgaft {
+	public static void main(String[] args) {
+		System.out.println("Input a number:");
+		Scanner input = new Scanner(System.in);
+		int hours = input.nextInt();
+		int minutes = input.nextInt();
+		
+		minutes = minutes - 45;
+		if(minutes < 0) {
+			minutes = 0;
+			minutes += 45;
+			hours--;
+		}
+		
+		System.out.println(hours + " : " + minutes);
+	}
+}
